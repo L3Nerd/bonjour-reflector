@@ -14,7 +14,6 @@ import (
 var (
 	srcMACTest         = net.HardwareAddr{0xFF, 0xAA, 0xFA, 0xAA, 0xFF, 0xAA}
 	dstMACTest         = net.HardwareAddr{0xBD, 0xBD, 0xBD, 0xBD, 0xBD, 0xBD}
-	brMACTest          = net.HardwareAddr{0xF2, 0xAA, 0xFA, 0xAA, 0xFF, 0xAA}
 	vlanIdentifierTest = uint16(30)
 	srcIPv4Test        = net.IP{127, 0, 0, 1}
 	dstIPv4Test        = net.IP{224, 0, 0, 251}
@@ -138,33 +137,18 @@ func TestParseIPLayer(t *testing.T) {
 	decoder := gopacket.DecodersByLayerName["Ethernet"]
 	options := gopacket.DecodeOptions{Lazy: true}
 
-	isIPv4 := true
-	ipv4Packet := gopacket.NewPacket(createMockmDNSPacket(isIPv4, true), decoder, options)
+	ipv4Packet := gopacket.NewPacket(createMockmDNSPacket(true, true), decoder, options)
 
-	computedIPv4, computedIsIPv6 := parseIPLayer(ipv4Packet)
-	if !reflect.DeepEqual(dstIPv4Test, computedIPv4) || (computedIsIPv6 == isIPv4) {
+	computedIsIPv6 := parseIPLayer(ipv4Packet)
+	if computedIsIPv6 {
 		t.Error("Error in parseIPLayer() for IPv4 addresses")
 	}
 
-	isIPv4 = false
-	ipv6Packet := gopacket.NewPacket(createMockmDNSPacket(isIPv4, true), decoder, options)
+	ipv6Packet := gopacket.NewPacket(createMockmDNSPacket(false, true), decoder, options)
 
-	computedIPv6, computedIsIPv6 := parseIPLayer(ipv6Packet)
-	if !reflect.DeepEqual(dstIPv6Test, computedIPv6) || (computedIsIPv6 == isIPv4) {
+	computedIsIPv6 = parseIPLayer(ipv6Packet)
+	if !computedIsIPv6 {
 		t.Error("Error in parseIPLayer() for IPv6 addresses")
-	}
-}
-
-func TestParseUDPLayer(t *testing.T) {
-	decoder := gopacket.DecodersByLayerName["Ethernet"]
-	options := gopacket.DecodeOptions{Lazy: true}
-
-	packet := gopacket.NewPacket(createMockmDNSPacket(true, true), decoder, options)
-
-	expectedResult := dstUDPPortTest
-	computedResult, _ := parseUDPLayer(packet)
-	if !reflect.DeepEqual(expectedResult, computedResult) {
-		t.Error("Error in parseUDPLayer()")
 	}
 }
 
@@ -174,7 +158,7 @@ func TestParseDNSPayload(t *testing.T) {
 
 	questionPacket := gopacket.NewPacket(createMockmDNSPacket(true, true), decoder, options)
 
-	_, questionPacketPayload := parseUDPLayer(questionPacket)
+	questionPacketPayload := parseUDPLayer(questionPacket)
 
 	questionExpectedResult := true
 	questionComputedResult := parseDNSPayload(questionPacketPayload)
@@ -184,7 +168,7 @@ func TestParseDNSPayload(t *testing.T) {
 
 	answerPacket := gopacket.NewPacket(createMockmDNSPacket(true, false), decoder, options)
 
-	_, answerPacketPayload := parseUDPLayer(answerPacket)
+	answerPacketPayload := parseUDPLayer(answerPacket)
 
 	answerExpectedResult := false
 	answerComputedResult := parseDNSPayload(answerPacketPayload)
@@ -239,7 +223,7 @@ func areBonjourPacketsEqual(a, b bonjourPacket) (areEqual bool) {
 
 func TestFilterBonjourPacketsLazily(t *testing.T) {
 	mockPacketSource, packet := createMockPacketSource()
-	packetChan := filterBonjourPacketsLazily(mockPacketSource, brMACTest)
+	packetChan := parsePacketsLazily(mockPacketSource)
 
 	expectedResult := bonjourPacket{
 		packet:     packet,
